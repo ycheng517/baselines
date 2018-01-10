@@ -89,3 +89,52 @@ def cnn_to_mlp(convs, hiddens, dueling=False, layer_norm=False):
 
     return lambda *args, **kwargs: _cnn_to_mlp(convs, hiddens, dueling, layer_norm=layer_norm, *args, **kwargs)
 
+def dual_cnn_to_mlp(convs, hiddens, dueling=False, layer_norm=False):
+    return lambda *args, **kwargs: _cnn_to_mlp(convs, hiddens, dueling, layer_norm=layer_norm, *args, **kwargs)
+
+def _dual_cnn_to_mlp(convs, hiddens, dueling, inpt1, inpt2, num_actions, scope, reuse=False, layer_norm=False):
+    with tf.variable_scope(scope, reuse=reuse):
+        out1 = inpt1
+        with tf.variable_scope("convnet"):
+            for num_outputs, kernel_size, stride in convs:
+                out1 = layers.convolution2d(out1,
+                                            num_outputs=num_outputs,
+                                            kernel_size=kernel_size,
+                                            stride=stride,
+                                            activation_fn=tf.nn.relu)
+        conv_out1 = layers.flatten(out1)
+
+        with tf.variable_scope("convnet"):
+            for num_outputs, kernel_size, stride in convs:
+                out2 = layers.convolution2d(out2,
+                                            num_outputs=num_outputs,
+                                            kernel_size=kernel_size,
+                                            stride=stride,
+                                            activation_fn=tf.nn.relu)
+        conv_out2 = layers.flatten(out2)
+        conv_out = tf.concat([conv_out1, conv_out2], axis=1)
+
+        with tf.variable_scope("action_value"):
+            action_out = conv_out
+            for hidden in hiddens:
+                action_out = layers.fully_connected(action_out, num_outputs=hidden, activation_fn=None)
+                if layer_norm:
+                    action_out = layers.layer_norm(action_out, center=True, scale=True)
+                action_out = tf.nn.relu(action_out)
+            action_scores = layers.fully_connected(action_out, num_outputs=num_actions, activation_fn=None)
+
+        if dueling:
+            with tf.variable_scope("state_value"):
+                state_out = conv_out
+                for hidden in hiddens:
+                    state_out = layers.fully_connected(state_out, num_outputs=hidden, activation_fn=None)
+                    if layer_norm:
+                        state_out = layers.layer_norm(state_out, center=True, scale=True)
+                    state_out = tf.nn.relu(state_out)
+                state_score = layers.fully_connected(state_out, num_outputs=1, activation_fn=None)
+            action_scores_mean = tf.reduce_mean(action_scores, 1)
+            action_scores_centered = action_scores - tf.expand_dims(action_scores_mean, 1)
+            q_out = state_score + action_scores_centered
+        else:
+            q_out = action_scores
+        return q_out

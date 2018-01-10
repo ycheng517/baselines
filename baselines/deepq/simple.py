@@ -103,7 +103,7 @@ def learn(env,
     -------
     env: gym.Env
         environment to train on
-    q_func: (tf.Variable, int, str, bool) -> tf.Variable
+    q_func: (tf.Variable, tf.Variable, int, str, bool) -> tf.Variable
         the model that takes the following inputs:
             observation_in: object
                 the output of observation placeholder
@@ -276,6 +276,11 @@ def learn(env,
                 logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
                 logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                 logger.dump_tabular()
+
+                print("steps: {}".format(t))
+                print("episodes: {}".format(num_episodes))
+                print("mean 100 episode reward: {}".format(mean_100ep_reward))
+                print("% time spent exploring: {}".format(int(100 * exploration.value(t))))
 
             if (checkpoint_freq is not None and t > learning_starts and
                     num_episodes > 100 and t % checkpoint_freq == 0):
